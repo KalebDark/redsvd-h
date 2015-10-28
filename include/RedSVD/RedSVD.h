@@ -36,21 +36,21 @@
 namespace RedSVD {
 	template<typename Scalar>
 	inline void SampleGaussian(Scalar& x, Scalar& y) {
-		const Scalar PI(3.1415926535897932384626433832795028841971693993751);
-		
+		const Scalar PI(3.1415926535897932384626433832795028841971693993751f);
+
 		Scalar v1 = (Scalar)(std::rand() + Scalar(1)) / ((Scalar)RAND_MAX + Scalar(2));
 		Scalar v2 = (Scalar)(std::rand() + Scalar(1)) / ((Scalar)RAND_MAX + Scalar(2));
 		Scalar len = std::sqrt(Scalar(-2) * std::log(v1));
 		x = len * std::cos(Scalar(2) * PI * v2);
 		y = len * std::sin(Scalar(2) * PI * v2);
 	}
-	
+
 	template<typename MatrixType>
 	inline void SampleGaussian(MatrixType& mat) {
 		typedef typename MatrixType::Index Index;
-		
+
 		for(Index i = 0; i < mat.rows(); ++i) {
-			for(Index j = 0; j+1 < mat.cols(); j += 2) {
+			for(Index j = 0; j + 1 < mat.cols(); j += 2) {
 				SampleGaussian(mat(i, j), mat(i, j + 1));
 			}
 			if(mat.cols() % 2) {
@@ -58,22 +58,21 @@ namespace RedSVD {
 			}
 		}
 	}
-	
+
 	template<typename MatrixType>
 	inline void GramSchmidt(MatrixType& mat) {
 		typedef typename MatrixType::Scalar Scalar;
 		typedef typename MatrixType::Index Index;
-		
-		static const Scalar EPS(1E-4);
-		
+
+		static const Scalar EPS(static_cast<Scalar>(1E-4));
+
 		for(Index i = 0; i < mat.cols(); ++i) {
 			for(Index j = 0; j < i; ++j) {
 				Scalar r = mat.col(i).dot(mat.col(j));
 				mat.col(i) -= r * mat.col(j);
 			}
-			
+
 			Scalar norm = mat.col(i).norm();
-			
 			if(norm < EPS) {
 				for(Index k = i; k < mat.cols(); ++k) {
 					mat.col(k).setZero();
@@ -83,7 +82,8 @@ namespace RedSVD {
 			mat.col(i) /= norm;
 		}
 	}
-	
+
+	// https://en.wikipedia.org/wiki/Singular_value_decomposition
 	template<typename _MatrixType>
 	class RedSVD {
 	public:
@@ -92,80 +92,79 @@ namespace RedSVD {
 		typedef typename MatrixType::Index Index;
 		typedef typename Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> DenseMatrix;
 		typedef typename Eigen::Matrix<Scalar, Eigen::Dynamic, 1> ScalarVector;
-		
+
 		RedSVD() {}
-		
+
 		RedSVD(const MatrixType& A) {
 			int r = (A.rows() < A.cols()) ? A.rows() : A.cols();
 			compute(A, r);
 		}
-		
+
 		RedSVD(const MatrixType& A, const Index rank) {
 			compute(A, rank);
 		}
-		
+
 		void compute(const MatrixType& A, const Index rank) {
 			if(A.cols() == 0 || A.rows() == 0) {
 				return;
 			}
-			
+
 			Index r = (rank < A.cols()) ? rank : A.cols();
-			
 			r = (r < A.rows()) ? r : A.rows();
-			
+
 			// Gaussian Random Matrix for A^T
 			DenseMatrix O(A.rows(), r);
 			SampleGaussian(O);
-			
+
 			// Compute Sample Matrix of A^T
 			DenseMatrix Y = A.transpose() * O;
-			
+
 			// Orthonormalize Y
 			GramSchmidt(Y);
-			
+
 			// Range(B) = Range(A^T)
 			DenseMatrix B = A * Y;
-			
+
 			// Gaussian Random Matrix
 			DenseMatrix P(B.cols(), r);
 			SampleGaussian(P);
-			
+
 			// Compute Sample Matrix of B
 			DenseMatrix Z = B * P;
-			
+
 			// Orthonormalize Z
 			GramSchmidt(Z);
-			
+
 			// Range(C) = Range(B)
 			DenseMatrix C = Z.transpose() * B; 
-			
+
 			Eigen::JacobiSVD<DenseMatrix> svdOfC(C, Eigen::ComputeThinU | Eigen::ComputeThinV);
-			
+
 			// C = USV^T
 			// A = Z * U * S * V^T * Y^T()
 			_matrixU = Z * svdOfC.matrixU();
 			_vectorS = svdOfC.singularValues();
 			_matrixV = Y * svdOfC.matrixV();
 		}
-		
+
 		DenseMatrix matrixU() const {
 			return _matrixU;
 		}
-		
+
 		ScalarVector singularValues() const {
 			return _vectorS;
 		}
-		
+
 		DenseMatrix matrixV() const {
 			return _matrixV;
 		}
-		
+
 	private:
 		DenseMatrix _matrixU;
 		ScalarVector _vectorS;
 		DenseMatrix _matrixV;
 	};
-	
+
 	template<typename _MatrixType>
 	class RedSymEigen {
 	public:
@@ -174,57 +173,57 @@ namespace RedSVD {
 		typedef typename MatrixType::Index Index;
 		typedef typename Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> DenseMatrix;
 		typedef typename Eigen::Matrix<Scalar, Eigen::Dynamic, 1> ScalarVector;
-		
+
 		RedSymEigen() {}
-		
+
 		RedSymEigen(const MatrixType& A) {
 			int r = (A.rows() < A.cols()) ? A.rows() : A.cols();
 			compute(A, r);
 		}
-		
+
 		RedSymEigen(const MatrixType& A, const Index rank) {
 			compute(A, rank);
 		}
-		
+
 		void compute(const MatrixType& A, const Index rank) {
 			if(A.cols() == 0 || A.rows() == 0) {
 				return;
 			}
-			
+
 			Index r = (rank < A.cols()) ? rank : A.cols();
-			
 			r = (r < A.rows()) ? r : A.rows();
-			
+
 			// Gaussian Random Matrix
 			DenseMatrix O(A.rows(), r);
 			SampleGaussian(O);
-			
+
 			// Compute Sample Matrix of A
 			DenseMatrix Y = A.transpose() * O;
-			
+
 			// Orthonormalize Y
 			GramSchmidt(Y);
-			
+
 			DenseMatrix B = Y.transpose() * A * Y;
 			Eigen::SelfAdjointEigenSolver<DenseMatrix> eigenOfB(B);
-			
+
 			_eigenvalues = eigenOfB.eigenvalues();
 			_eigenvectors = Y * eigenOfB.eigenvectors();
 		}
-		
+
 		ScalarVector eigenvalues() const {
 			return _eigenvalues;
 		}
-		
+
 		DenseMatrix eigenvectors() const {
 			return _eigenvectors;
 		}
-		
+
 	private:
 		ScalarVector _eigenvalues;
 		DenseMatrix _eigenvectors;
 	};
-	
+
+	/// https://en.wikipedia.org/wiki/Principal_component_analysis
 	template<typename _MatrixType>
 	class RedPCA {
 	public:
@@ -233,35 +232,35 @@ namespace RedSVD {
 		typedef typename MatrixType::Index Index;
 		typedef typename Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> DenseMatrix;
 		typedef typename Eigen::Matrix<Scalar, Eigen::Dynamic, 1> ScalarVector;
-		
+
 		RedPCA() {}
-		
+
 		RedPCA(const MatrixType& A) {
 			int r = (A.rows() < A.cols()) ? A.rows() : A.cols();
 			compute(A, r);
 		}
-		
+
 		RedPCA(const MatrixType& A, const Index rank) {
 			compute(A, rank);
 		}
-		
+
 		void compute(const DenseMatrix& A, const Index rank) {
 			RedSVD<MatrixType> redsvd(A, rank);
-			
+
 			ScalarVector S = redsvd.singularValues();
-			
+
 			_components = redsvd.matrixV();
 			_scores = redsvd.matrixU() * S.asDiagonal();
 		}
-		
+
 		DenseMatrix components() const {
 			return _components;
 		}
-		
+
 		DenseMatrix scores() const {
 			return _scores;
 		}
-		
+
 	private:
 		DenseMatrix _components;
 		DenseMatrix _scores;
